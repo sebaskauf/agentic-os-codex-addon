@@ -1,0 +1,2 @@
+host/src/vendor/** -whitespace
+host/native/** -whitespace

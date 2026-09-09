@@ -1,0 +1,9 @@
+.aos-codex-view { display: flex; flex-direction: column; padding: 12px; height: 100%; gap: 8px; }
+.aos-codex-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.aos-codex-status { color: var(--text-muted); font-size: var(--font-smallest); }
+.aos-codex-terminal { flex: 1; min-height: 160px; overflow: hidden; border-radius: 6px; padding: 8px; background: #171717; }
+.aos-codex-terminal .xterm { height: 100%; }
+.aos-codex-toolbar input { min-width: 160px; flex: 1; }
+.aos-codex-toolbar select { max-width: 260px; }
+.aos-codex-status { overflow-wrap: anywhere; }
+.aos-codex-toolbar :focus-visible { outline: 2px solid var(--interactive-accent, #a78bfa); outline-offset: 2px; }

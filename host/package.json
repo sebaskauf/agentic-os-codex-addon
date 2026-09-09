@@ -1,0 +1,21 @@
+{
+  "name": "agentic-os-codex-host",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit && node build.mjs",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@xterm/addon-fit": "0.11.0",
+    "@xterm/xterm": "6.0.0",
+    "node-pty": "1.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "22.18.6",
+    "esbuild": "0.25.5",
+    "obsidian": "1.8.7",
+    "typescript": "5.8.3"
+  }
+}

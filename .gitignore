@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+node_modules/
+.local/
+host/build/
+host/.preview/
+.DS_Store
+*.zip

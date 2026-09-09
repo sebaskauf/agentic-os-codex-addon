@@ -1,0 +1,18 @@
+{
+  "name": "agentic-os-codex-addon",
+  "version": "0.1.0",
+  "description": "Set up an optional Codex terminal beside an existing Agentic OS and migrate selected local roles, skills and MCP connections.",
+  "author": {
+    "name": "SKAILE"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Agentic OS Codex Setup",
+    "shortDescription": "Add Codex to your existing Agentic OS.",
+    "longDescription": "Inspect your existing setup, select integrations and install a separate Codex companion with reviewed changes, backups and rollback.",
+    "developerName": "SKAILE",
+    "category": "Productivity",
+    "capabilities": [],
+    "defaultPrompt": "Richte die optionale Codex-Erweiterung für mein bestehendes Agentic OS ein. Lies zuerst INSTALL.md und bewahre meine eigenen Anpassungen."
+  }
+}

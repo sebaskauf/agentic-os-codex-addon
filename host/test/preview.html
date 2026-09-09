@@ -1,0 +1,26 @@
+<!doctype html><html lang="de"><meta charset="utf-8"><title>Agentic OS Codex · isolated UI preview</title><link rel="stylesheet" href="/build/styles.css"><style>
+:root { --text-muted: #999; --font-smallest: 12px; color-scheme: dark; } *{ box-sizing:border-box } body{ margin:0; background:#202020; color:#ddd; font:14px system-ui } header{ padding:20px 24px; border-bottom:1px solid #333; font-weight:600 } .banner{ padding:12px 24px; color:#bea780; font-size:12px } #pane{ height:calc(100vh - 100px); } button,select,input { padding:8px 12px; border:1px solid #444; border-radius:6px; background:#292929; color:#ddd; } input { flex:1; min-width:160px; } button{ cursor:pointer } button:disabled{ opacity:.4 }
+</style><header>Agentic OS · Codex-Erweiterung</header><div class="banner">Isolierte Vorschau mit dem echten Plugin-Bundle und simulierten Obsidian-APIs. Keine Konten, keine Modellaufrufe.</div><div id="pane"></div><script>
+window.module = { exports: {} }; window.exports = window.module.exports;
+window.process = { platform: 'darwin', arch: 'arm64', env: { PATH: '/usr/bin' } };
+HTMLElement.prototype.empty = function(){ this.replaceChildren(); };
+HTMLElement.prototype.addClass = function(...classes){ this.classList.add(...classes); };
+HTMLElement.prototype.createEl = function(tag, opts = {}) { const el = document.createElement(tag); if(opts.text) el.textContent=opts.text; if(opts.cls) el.className=opts.cls; if(opts.value !== undefined) el.value=opts.value; if(opts.type) el.type=opts.type; for(const [k,v] of Object.entries(opts.attr ?? {})) el.setAttribute(k,v); this.append(el); return el; };
+HTMLElement.prototype.createDiv = function(opts){ return this.createEl('div',opts); };
+class FileSystemAdapter { getBasePath(){ return '/Users/member/Documents/My Brain'; } }
+class ItemView { constructor(leaf){ this.leaf=leaf; this.contentEl=document.getElementById('pane'); } async setState(){} }
+class Plugin { constructor(){ this.manifest={id:'agentic-os-codex'}; this.app={ vault:{ adapter:new FileSystemAdapter(),configDir:'.obsidian'}, commands:{ commands:{'agentic-os:open-terminal-pane':{}}, executeCommandById:()=>{ window.claudeCommandTriggered=true; return true; } } }; } async loadData(){ return null; } async saveData(){} registerView(type,factory){ this.factory=factory; } addCommand(){} addRibbonIcon(){} }
+window.require = name => {
+ if(name==='obsidian') return {Plugin,ItemView,FileSystemAdapter,Notice:class{constructor(text){window.lastNotice=text;}}};
+ if(name==='crypto') return {randomUUID:()=>crypto.randomUUID()};
+ if(name==='os') return {homedir:()=>'/Users/member'};
+ if(name==='path') return {join:(...parts)=>parts.join('/').replace(/\/+/g,'/'),delimiter:':',isAbsolute:p=>p.startsWith('/')};
+ if(name==='fs') return {existsSync:()=>true,statSync:()=>({isDirectory:()=>true}),readdirSync:()=>['content.config.toml','review.config.toml']};
+ if(name==='timers') return {setTimeout};
+ if(name==='child_process') return {spawn:()=>{ throw new Error('Preview blocks all process spawning'); }};
+ if(name==='net') return {};
+ throw new Error('Preview module unsupported '+name);
+};
+</script><script src="/build/main.js"></script><script>
+(async()=>{ window.previewPlugin=new module.exports.default(); await previewPlugin.onload(); window.previewView=previewPlugin.factory({}); await previewView.onOpen(); document.body.dataset.previewReady='true'; })().catch(e=>{document.getElementById('pane').textContent=e.stack;});
+</script></html>
