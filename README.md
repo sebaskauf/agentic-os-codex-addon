@@ -4,13 +4,13 @@ Codex als freiwilliger Zusatz zu deinem vorhandenen Agentic OS. Dein bisheriges 
 
 Die erste Fassung öffnet eine eigene Codex-Terminalansicht in Obsidian. Dort wählst du deinen Projektordner und eine übernommene Agentenrolle. Über den Claude-Button kannst du das Terminal des vorhandenen Agentic OS öffnen, sofern dessen Standardbefehl vorhanden ist. Eine Umschaltung innerhalb des bisherigen Chat-Drawers und die Erweiterung separater Cutting-Cockpits sind nicht Bestandteil dieser Fassung.
 
-Status ist eine Pilotfassung für macOS. Windows wird bei der Installation ausdrücklich abgewiesen. Ein Test auf einem fremden Mitglieder-Rechner und dessen Kontoverbindungen ist vor öffentlicher Freigabe noch erforderlich.
+Status ist eine Pilotfassung für macOS. Windows wird bei der Installation ausdrücklich abgewiesen. Der Quellcode ist öffentlich verfügbar. Die Abnahme in der echten Obsidian-Oberfläche sowie ein Test auf einem fremden Mitglieder-Rechner und dessen Kontoverbindungen stehen noch aus.
 
 ## Einrichtung mit Claude oder Codex
 
-Lade das Release-Paket herunter und entpacke es. Gib deinem Agenten diesen Auftrag und ergänze den tatsächlichen Ordnerpfad.
+Klone dieses Repository in einen neuen lokalen Projektordner. Das vorbereitete Release liegt derzeit noch als Entwurf vor. Gib deinem Agenten diesen Auftrag.
 
-> Lies die INSTALL.md im entpackten Ordner der Agentic-OS-Codex-Erweiterung. Prüfe mein vorhandenes Agentic OS und richte den optionalen Codex-Zusatz ein. Übernimm die Agenten, Skills und Verbindungen, die ich auswähle. Erhalte meine bisherigen Anpassungen und zeig mir zuerst den konkreten Änderungsplan. Begleite mich bei den nötigen Anmeldungen und prüfe anschließend das Ergebnis.
+> Lies README.md und INSTALL.md in diesem Repository. Baue im Source-Checkout zunächst die Erweiterung mit den dokumentierten Befehlen unter host/. Prüfe mein vorhandenes Agentic OS und richte den optionalen Codex-Zusatz ein. Übernimm die Agenten, Skills und Verbindungen, die ich auswähle. Erhalte meine bisherigen Anpassungen und zeig mir zuerst den konkreten Änderungsplan. Begleite mich bei den nötigen Anmeldungen und prüfe anschließend das Ergebnis.
 
 Das Paket funktioniert als Setup-Anleitung aus beiden Coding-Agenten. Zusätzlich enthält es native Claude- und Codex-Plugin-Manifeste für den Setup-Skill. Eine Marketplace-Installation ist für den Einstiegsprompt nicht nötig und wird durch den Installer nicht im Hintergrund vorgenommen.
 
@@ -27,7 +27,7 @@ Login und Kontofreigaben erfolgen beim jeweiligen Anbieter. Die Einrichtung unte
 
 ## Voraussetzungen
 
-macOS, ein vorhandenes Agentic OS in einem lokalen Obsidian-Vault, Python ab 3.11 und ein nutzbarer Codex-CLI-Zugang. Das Release enthält die gebaute Obsidian-Erweiterung und ihre nativen Terminaldateien für Apple Silicon und Intel. Der native Terminaltest wurde auf Apple Silicon ausgeführt; Intel bleibt separat zu prüfen.
+macOS, ein vorhandenes Agentic OS in einem lokalen Obsidian-Vault, Python ab 3.11 und ein nutzbarer Codex-CLI-Zugang. Das vorbereitete Release-Paket enthält die gebaute Obsidian-Erweiterung und ihre nativen Terminaldateien für Apple Silicon und Intel. Der native Terminaltest wurde auf Apple Silicon ausgeführt; Intel bleibt separat zu prüfen.
 
 Die CLI- und MCP-Nutzung unterliegt deinem eigenen Konto. Der Installer selbst ruft keine Modelle auf. Er erweitert keine globalen Zugriffsrechte und kopiert keine Anmeldedateien.
 
@@ -44,6 +44,6 @@ python3 -B -m unittest integrations.test_planner -v
 python3 scripts/package.py --output .local/agentic-os-codex-addon-0.1.0.zip
 ```
 
-`host/build` ist ein isoliertes Build-Verzeichnis. Kein Build-Befehl installiert oder lädt ein aktives Obsidian-Plugin neu. Der Source-Checkout enthält noch kein Build; für Mitglieder ist das vorbereitete Release-Paket der einfachere Weg.
+`host/build` ist ein isoliertes Build-Verzeichnis. Kein Build-Befehl installiert oder lädt ein aktives Obsidian-Plugin neu. Der Source-Checkout enthält noch kein Build. Für die Einrichtung aus dem öffentlichen Repository sind deshalb Node.js und npm sowie die oben genannten Build-Schritte erforderlich.
 
 Details stehen in [INSTALL.md](INSTALL.md), [Integrationen](integrations/README.md) und [Abnahme](docs/VERIFICATION.md).
