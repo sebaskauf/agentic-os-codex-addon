@@ -1,0 +1,15 @@
+{
+  "version": "0.1.0-pilot.1",
+  "repository": "https://github.com/sebaskauf/agentic-os-codex-addon",
+  "visibility": "private",
+  "code_commit": "775af1a",
+  "artifact": ".local/releases/v0.1.0-pilot.1-final/agentic-os-codex-addon.zip",
+  "sha256": "25cebcd688a0384311d314d23fb9e2371b6425592f9eaeee6803b1084054a5e5",
+  "archive_files_verified": 106,
+  "archive_bytes": 343592,
+  "automated_tests_passed": 37,
+  "extracted_cli_install_and_rollback": "passed",
+  "native_obsidian_acceptance": "pending",
+  "member_auth_and_tool_tests": "pending",
+  "community_publication": "not-published"
+}

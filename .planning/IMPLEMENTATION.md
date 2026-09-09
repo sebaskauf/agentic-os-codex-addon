@@ -11,7 +11,7 @@ Autorisiert am 09.09.2026. Separate Arbeitskopie, keine Änderungen oder Reloads
 - [x] Claude-/Codex-Setup-Skill, README, Einstiegsprompt und Community-Lektion schreiben.
 - [x] Frische und existierende Fixture-Installationen, Fork-Konflikt, Rollback, Claude-only, Auth-Status, Pfad-/Symlink-Grenzen prüfen.
 - [x] Host-Build und Browser-Vorschau des echten Bundles isoliert geprüft. Native Obsidian-Abnahme noch offen, siehe docs/VERIFICATION.md.
-- [ ] Paket auf persönliche Daten prüfen, Git-Commit und privates Remote erstellen, Status und offene Plattform-/Fremdtests dokumentieren.
+- [x] Paket auf persönliche Daten geprüft, Git-Commit und privates Remote erstellt, Status und offene Plattform-/Fremdtests dokumentiert. Repo sebaskauf/agentic-os-codex-addon.
 
 ## Verträge
 
