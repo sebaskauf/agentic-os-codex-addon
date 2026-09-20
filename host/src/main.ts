@@ -5,7 +5,8 @@ import type { IPty } from "node-pty";
 import { randomUUID } from "crypto";
 import { existsSync, chmodSync, statSync } from "fs";
 import { join, isAbsolute } from "path";
-import { startCodexBridge, type CodexBridge } from "./codexBridge";
+import { startCodexBridge, TOKEN_ENV, type CodexBridge } from "./codexBridge";
+import { isWin, spawnable, supportedPlatform } from "./platform";
 import { codexCommand, listCodexProfiles } from "./providers/codex";
 import { readSettings, resumableThread, type HostSettings, type SavedSession } from "./state";
 
@@ -118,12 +119,12 @@ export class CodexView extends ItemView {
     this.status = this.contentEl.createDiv({ cls: "aos-codex-status" });
     this.status.setAttribute("role", "status");
     this.status.setAttribute("aria-live", "polite");
-    this.status.textContent = process.platform !== "darwin"
-      ? "Diese Pilotversion unterstützt macOS. Unter Windows und Linux startet sie keinen Prozess."
+    this.status.textContent = !supportedPlatform()
+      ? "Diese Version unterstützt macOS und Windows. Unter Linux startet sie keinen Prozess."
       : host?.commands[CLAUDE_COMMAND]
         ? "Bereit. Startet erst nach deinem Klick. Profile und Berechtigungen stammen aus deiner Codex-Konfiguration."
         : "Agentic-OS-Terminalbefehl nicht gefunden. Codex kann separat genutzt werden. Dein bestehendes OS wird nicht verändert.";
-    if (process.platform !== "darwin") this.startButton.disabled = true;
+    if (!supportedPlatform()) this.startButton.disabled = true;
     const terminalEl = this.contentEl.createDiv({ cls: "aos-codex-terminal" });
     this.term = new Terminal({ cursorBlink: true, fontSize: 13, scrollback: 5000, theme: { background: "#171717", foreground: "#e8e8e8" }, allowProposedApi: false });
     this.fit = new FitAddon();
@@ -136,7 +137,7 @@ export class CodexView extends ItemView {
     this.observer.observe(terminalEl);
   }
   private async start(): Promise<void> {
-    if (this.pty || this.starting || process.platform !== "darwin") return;
+    if (this.pty || this.starting || !supportedPlatform()) return;
     const cwd = this.cwd?.value.trim() ?? "";
     if (!isAbsolute(cwd) || !existsSync(cwd) || !statSync(cwd).isDirectory()) { new Notice("Bitte einen vorhandenen absoluten Arbeitsordner wählen."); return; }
     const selectedProfile = this.profile?.value || undefined;
@@ -164,13 +165,15 @@ export class CodexView extends ItemView {
       this.bridge = bridge;
       const entry = join(this.plugin.pluginPath(), "native", `${process.platform}-${process.arch}`, "lib", "index.js");
       if (!existsSync(entry)) throw new Error(`Terminalpaket fehlt für ${process.platform}-${process.arch}. Bitte die vollständige Erweiterung installieren.`);
+      // macOS ships a spawn-helper whose executable bit can be lost by zip/git. Windows uses ConPTY instead.
       const helper = join(this.plugin.pluginPath(), "native", `${process.platform}-${process.arch}`, "prebuilds", `${process.platform}-${process.arch}`, "spawn-helper");
-      if (existsSync(helper)) chmodSync(helper, 0o755);
+      if (!isWin && existsSync(helper)) chmodSync(helper, 0o755);
       const electron = window as unknown as { require: NodeRequire };
       const native = electron.require(entry) as typeof import("node-pty");
-      const command = codexCommand({ cwd, profile: selectedProfile, nativeThreadId: this.session.threadId, additionalDirs: [] }, bridge.remote);
+      const command = codexCommand({ cwd, profile: selectedProfile, nativeThreadId: this.session.threadId, additionalDirs: [] }, bridge.remote, bridge.transport === "ws" ? TOKEN_ENV : undefined);
+      const launch = spawnable(command.file, command.args);
       this.fit?.fit();
-      this.pty = native.spawn(command.file, command.args, { cwd, env: command.env, name: "xterm-256color", cols: this.term?.cols ?? 100, rows: this.term?.rows ?? 28 });
+      this.pty = native.spawn(launch.file, launch.args, { cwd, env: { ...command.env, ...bridge.tuiEnv }, name: "xterm-256color", cols: this.term?.cols ?? 100, rows: this.term?.rows ?? 28 });
       this.pty.onData(data => { if (attempt === this.generation) this.term?.write(data); });
       this.pty.onExit(({ exitCode }) => {
         if (attempt !== this.generation) return;
@@ -201,6 +204,6 @@ export class CodexView extends ItemView {
     if (this.profile) this.profile.disabled = Boolean(this.session.threadId);
     if (this.cwd) this.cwd.disabled = Boolean(this.session.threadId);
     if (this.status) this.status.textContent = "Gestoppt. Eine bestätigte native Sitzung kann wieder aufgenommen werden.";
-    if (this.startButton && process.platform === "darwin") { this.startButton.disabled = false; this.startButton.textContent = this.session.threadId ? "Sitzung fortsetzen" : "Codex starten"; }
+    if (this.startButton && supportedPlatform()) { this.startButton.disabled = false; this.startButton.textContent = this.session.threadId ? "Sitzung fortsetzen" : "Codex starten"; }
   }
 }

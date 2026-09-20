@@ -15,6 +15,8 @@ NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}\Z")
 ENV_NAME = re.compile(r"[A-Z_][A-Z0-9_]*\Z")
 BEGIN = "# BEGIN AGENTIC OS CODEX ADDON INTEGRATIONS"
 END = "# END AGENTIC OS CODEX ADDON INTEGRATIONS"
+MD_BEGIN = "<!-- BEGIN AGENTIC OS CODEX ADDON -->"
+MD_END = "<!-- END AGENTIC OS CODEX ADDON -->"
 RECIPES = {
     "notion": "https://mcp.notion.com/mcp",
     "linear": "https://mcp.linear.app/mcp",
@@ -117,8 +119,29 @@ def _role(data: bytes, name: str) -> tuple[str, str]:
     return description, match[2]
 
 
+def agents_md_block(vault: Path, brain: Path, memory_index: Path | None) -> str:
+    """Instructions Codex loads from the vault root so both agents share one memory."""
+    lines = [MD_BEGIN, "# Gemeinsames Gedächtnis für Claude Code und Codex", "",
+             "Dieser Vault ist mein Agentic OS. Claude Code und Codex arbeiten hier auf denselben Dateien und demselben Gedächtnis. Es gibt genau ein Gedächtnis, keine zweite Kopie.", ""]
+    same = brain == vault
+    where = "in diesem Ordner" if same else f"in meinem Second Brain unter `{brain.as_posix()}`"
+    lines.append(f"1. Lies zuerst `CLAUDE.md` {where}, falls vorhanden. Die Regeln dort gelten auch für dich.")
+    if memory_index is not None:
+        shown = memory_index.relative_to(brain).as_posix() if same else memory_index.as_posix()
+        lines.append(f"2. Mein Gedächtnis-Index ist `{shown}`. Lies ihn zu Beginn jeder Sitzung. Jede Zeile dort zeigt auf eine Datei im selben `memory/`-Ordner; lies die Datei, wenn das Thema gerade dran ist.")
+    else:
+        target = "memory/MEMORY.md" if same else f"{brain.as_posix()}/memory/MEMORY.md"
+        lines.append(f"2. Ein Gedächtnis-Index liegt noch nicht vor. Wenn du den ersten dauerhaften Eintrag anlegst, erzeuge `{target}` als Zeigerliste (eine Zeile je Eintrag) und lege die Einträge daneben in `memory/` ab.")
+    lines += ["3. Lernst du etwas Dauerhaftes (eine Entscheidung, einen Arbeitsstand, eine Vorliebe von mir), leg es als eigene Datei in `memory/` ab, im selben Format wie die vorhandenen Einträge: Frontmatter mit `name`, `description` und `metadata.type` (user, feedback, project oder reference), darunter der Inhalt. Ergänze danach eine Zeile im Index.",
+              "4. Ändere Einträge, die sich als falsch herausstellen, statt Duplikate anzulegen. Lösche nichts ohne ausdrückliches Ja.",
+              "5. Schreib in der Sprache, in der die vorhandenen Einträge geschrieben sind.",
+              MD_END]
+    return "\n".join(lines) + "\n"
+
+
 def build_changes(home: Path, vault: Path, selected_agents: list[str],
-                  selected_skills: list[str], selected_mcps: list[str]) -> dict:
+                  selected_skills: list[str], selected_mcps: list[str],
+                  brain: Path | None = None) -> dict:
     """Return changes containing path, before bytes/None, after bytes, and kind.
 
     Existing role bodies remain unchanged. Managed blocks are hash-guarded,
@@ -185,6 +208,50 @@ def build_changes(home: Path, vault: Path, selected_agents: list[str],
         propose(path, result.encode(), kind)
 
     config_entries = {}
+
+    def manage_markdown(path: Path, key: str, block: str, kind: str) -> None:
+        """Own one marker-delimited block in a member markdown file; keep everything else byte-identical."""
+        before = _read(path)
+        text = _text(before) if before is not None else ""
+        old = blocks.get(key)
+        if text.count(MD_BEGIN) != text.count(MD_END) or text.count(MD_BEGIN) > 1:
+            raise IntegrationError(f"Invalid managed markers: {path.name}")
+        if MD_BEGIN in text:
+            start, stop = text.index(MD_BEGIN), text.index(MD_END) + len(MD_END)
+            if stop < start or not isinstance(old, dict):
+                raise IntegrationError(f"Missing ownership record: {path.name}")
+            if _sha(text[start:stop].encode()) != old.get("sha256"):
+                raise IntegrationError(f"Managed section edited, review required: {path.name}")
+            prefix, suffix = text[:start], text[stop:]
+        else:
+            if old:
+                raise IntegrationError(f"Managed section removed, review required: {path.name}")
+            prefix, suffix = "", ("\n" + text if text else "")
+        envelope = block.rstrip("\n")
+        result = prefix + envelope + ("\n" if not suffix.startswith("\n") else "") + suffix
+        if not result.endswith("\n"):
+            result += "\n"
+        blocks[key] = {"sha256": _sha(envelope.encode())}
+        propose(path, result.encode(), kind)
+
+    if brain is not None:
+        brain = _safe(brain)
+        if not brain.is_dir():
+            raise IntegrationError("Second Brain folder must exist")
+        index = brain / "memory" / "MEMORY.md"
+        memory_index = index if index.is_file() else None
+        manage_markdown(vault / "AGENTS.md", "vault-agents-md", agents_md_block(vault, brain, memory_index), "brain-agents-md")
+        quote = lambda value: json.dumps(value, ensure_ascii=False)
+        # Codex asks for project trust before it writes; the member's own vault is trusted by definition.
+        config_entries["project-vault"] = f"[projects.{quote(vault.as_posix())}]\ntrust_level = \"trusted\"\n"
+        if brain != vault:
+            config_entries["project-brain"] = f"[projects.{quote(brain.as_posix())}]\ntrust_level = \"trusted\"\n"
+            # workspace-write sandboxes only cover the working folder; a separate brain needs an extra root.
+            config_entries["brain-writable-root"] = f"[sandbox_workspace_write]\nwritable_roots = [{quote(brain.as_posix())}]\n"
+        statuses.append({"kind": "brain", "name": brain.as_posix(), "state": "planned",
+                         "detail": "AGENTS.md im Vault verweist auf das gemeinsame Gedächtnis; Projekt-Trust für Codex. Ob Codex den Index wirklich liest, zeigt erst der Beweislauf."})
+        manual.append("Beweislauf: In der Codex-Ansicht fragen, welche Datei der Gedächtnis-Index ist, und einen Testeintrag schreiben lassen, den Claude danach liest.")
+
     for name in selected_agents:
         source = _source([vault / ".claude/agents" / f"{name}.md", home / ".claude/agents" / f"{name}.md"], "agent", name)
         description, body = _role(_read(source), name)

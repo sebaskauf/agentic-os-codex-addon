@@ -84,3 +84,52 @@ test('empty native threads are not offered as durable resume targets', () => {
   observer.response({ method: 'turn/started', params: { threadId: A } });
   assert.equal(resumableThread(observer.current), A);
 });
+
+test('windows .cmd shims are wrapped for cmd.exe with quoted arguments', async () => {
+  await build({ entryPoints: ['src/platform.ts'], bundle: true, platform: 'node', format: 'cjs', outdir: tmp, outbase: 'src', outExtension: { '.js': '.cjs' } });
+  const { wrapForCmd, supportedPlatform } = require(join(tmp, 'platform.cjs'));
+  const wrapped = wrapForCmd('C:\\Users\\m\\AppData\\Roaming\\npm\\codex.cmd', ['--remote', 'ws://127.0.0.1:5000', '-C', 'C:\\My Vault'], 'cmd.exe');
+  assert.equal(wrapped.file, 'cmd.exe');
+  assert.deepEqual(wrapped.args, ['/d', '/s', '/c', '"C:\\Users\\m\\AppData\\Roaming\\npm\\codex.cmd --remote ws://127.0.0.1:5000 -C "C:\\My Vault""']);
+  assert.throws(() => wrapForCmd('codex.cmd', ['a"b'], 'cmd.exe'));
+  assert.equal(supportedPlatform(), process.platform === 'darwin' || process.platform === 'win32');
+});
+
+test('websocket bridge (Windows transport) guards the app-server with a capability token and serves a real TUI', { skip: process.platform === 'linux' }, async () => {
+  process.env.AGENTIC_OS_CODEX_TRANSPORT = 'ws';
+  await build({ entryPoints: ['src/codexBridge.ts', 'src/providers/codex.ts'], bundle: true, platform: 'node', format: 'cjs', outdir: join(tmp, 'ws'), outbase: 'src', outExtension: { '.js': '.cjs' } });
+  const { startCodexBridge, TOKEN_ENV } = require(join(tmp, 'ws/codexBridge.cjs'));
+  const { codexCommand } = require(join(tmp, 'ws/providers/codex.cjs'));
+  const net = await import('node:net');
+  const bridge = await startCodexBridge({ tabId: 'ws-fixture', launchId: 'test', cwd: tmp, onMetadata: () => {} });
+  try {
+    assert.match(bridge.remote, /^ws:\/\/127\.0\.0\.1:\d+$/);
+    assert.equal(bridge.transport, 'ws');
+    assert.equal(bridge.tuiArgs[0], '--remote-auth-token-env');
+    assert.match(bridge.tuiEnv[TOKEN_ENV], /^[0-9a-f]{64}$/);
+    const command = codexCommand({ cwd: tmp }, bridge.remote, TOKEN_ENV);
+    assert.deepEqual(command.args.slice(0, 4), ['--remote', bridge.remote, '--remote-auth-token-env', TOKEN_ENV]);
+    // Unauthenticated handshake through the bridge must be rejected by the app-server.
+    const port = Number(bridge.remote.split(':').pop());
+    const reply = await new Promise((resolve) => {
+      const s = net.connect(port, '127.0.0.1'); let data = '';
+      s.on('data', b => { data += b.toString('latin1'); });
+      s.on('connect', () => s.write(`GET / HTTP/1.1\r\nHost: 127.0.0.1:${port}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n`));
+      setTimeout(() => { s.destroy(); resolve(data.split('\r\n')[0]); }, 1500);
+    });
+    assert.match(reply, /401/);
+  } finally { bridge.dispose(); }
+  // Fresh bridge: a real TUI with the token connects (101) — proves the whole Windows-style chain on this host.
+  const bridge2 = await startCodexBridge({ tabId: 'ws-fixture-2', launchId: 'test', cwd: tmp, onMetadata: () => {} });
+  try {
+    const native = require(join(process.cwd(), 'native', `${process.platform}-${process.arch}`, 'lib/index.js'));
+    const command = codexCommand({ cwd: tmp }, bridge2.remote, TOKEN_ENV);
+    const child = native.spawn(command.file, command.args, { cwd: tmp, name: 'xterm-256color', cols: 100, rows: 30, env: { ...command.env, ...bridge2.tuiEnv } });
+    let out = '';
+    child.onData(t => { out += t; });
+    await new Promise(r => setTimeout(r, 7000));
+    child.kill();
+    assert.match(out, /OpenAI Codex/);
+    assert.notEqual(bridge2.identity.current.identityStatus, 'unavailable');
+  } finally { bridge2.dispose(); delete process.env.AGENTIC_OS_CODEX_TRANSPORT; }
+});

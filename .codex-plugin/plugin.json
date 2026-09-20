@@ -1,6 +1,6 @@
 {
   "name": "agentic-os-codex-addon",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Set up an optional Codex terminal beside an existing Agentic OS and migrate selected local roles, skills and MCP connections.",
   "author": {
     "name": "SKAILE"

@@ -41,6 +41,7 @@ export function validateCodexProfile(profile: string): void {
 export function codexCommand(
   request: LaunchRequest,
   remote?: string,
+  remoteAuthTokenEnv?: string,
 ): LaunchCommand {
   const args: string[] = [];
   const profile = request.profile ?? request.agentName;
@@ -48,7 +49,11 @@ export function codexCommand(
     validateCodexProfile(profile);
     args.push("-p", profile);
   }
-  if (remote !== undefined) args.push("--remote", remote);
+  if (remote !== undefined) {
+    args.push("--remote", remote);
+    // Websocket transport (Windows): the TUI presents the bridge's capability token.
+    if (remoteAuthTokenEnv !== undefined) args.push("--remote-auth-token-env", remoteAuthTokenEnv);
+  }
   args.push("--no-alt-screen", "-C", request.cwd);
   const dirs = new Set(request.additionalDirs ?? ALWAYS_ALLOWED_DIRS);
   dirs.delete(request.cwd);

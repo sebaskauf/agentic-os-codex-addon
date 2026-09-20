@@ -1,49 +1,47 @@
 # Agentic OS Codex Erweiterung
 
-Codex als freiwilliger Zusatz zu deinem vorhandenen Agentic OS. Dein bisheriges Agentic OS und deine Claude-Sessions werden nicht umgebaut.
+Codex als freiwilliger Zusatz zu deinem vorhandenen Agentic OS, auf Mac und Windows. Dein bisheriges Agentic OS und deine Claude-Sessions werden nicht umgebaut. Claude und Codex lesen und schreiben dasselbe Gedächtnis.
 
-Die erste Fassung öffnet eine eigene Codex-Terminalansicht in Obsidian. Dort wählst du deinen Projektordner und eine übernommene Agentenrolle. Über den Claude-Button kannst du das Terminal des vorhandenen Agentic OS öffnen, sofern dessen Standardbefehl vorhanden ist. Eine Umschaltung innerhalb des bisherigen Chat-Drawers und die Erweiterung separater Cutting-Cockpits sind nicht Bestandteil dieser Fassung.
+Die Erweiterung öffnet eine eigene Codex-Terminalansicht in Obsidian. Dort wählst du deinen Projektordner und eine übernommene Agentenrolle. Über den Claude-Button öffnest du das Terminal des vorhandenen Agentic OS, sofern dessen Standardbefehl vorhanden ist. Eine Umschaltung innerhalb des bisherigen Chat-Drawers und die Erweiterung separater Cutting-Cockpits sind nicht Bestandteil dieser Fassung.
 
-Status ist eine Pilotfassung für macOS. Windows wird bei der Installation ausdrücklich abgewiesen. Der Quellcode ist öffentlich verfügbar. Die Abnahme in der echten Obsidian-Oberfläche sowie ein Test auf einem fremden Mitglieder-Rechner und dessen Kontoverbindungen stehen noch aus.
+## Einrichtung
 
-## Einrichtung mit Claude oder Codex
+Kopier den Setup-Prompt aus [SETUP-PROMPT.md](SETUP-PROMPT.md) in Claude Code oder Codex. Er lädt das Release, macht eine Bestandsaufnahme deines Rechners (Vaults, Second Brain, Claude, Codex, Agents, Skills, MCPs), zeigt dir den Änderungsplan, wendet ihn an, schaltet die Ansicht in Obsidian ein und beweist am Ende, dass beide Agenten dasselbe Gedächtnis benutzen.
 
-Klone dieses Repository in einen neuen lokalen Projektordner. Das vorbereitete Release liegt derzeit noch als Entwurf vor. Gib deinem Agenten diesen Auftrag.
+Das Release-Paket enthält die gebaute Erweiterung samt Terminaldateien für macOS (Apple Silicon, Intel) und Windows (x64, ARM64). Node.js brauchst du dafür nicht.
 
-> Lies README.md und INSTALL.md in diesem Repository. Baue im Source-Checkout zunächst die Erweiterung mit den dokumentierten Befehlen unter host/. Prüfe mein vorhandenes Agentic OS und richte den optionalen Codex-Zusatz ein. Übernimm die Agenten, Skills und Verbindungen, die ich auswähle. Erhalte meine bisherigen Anpassungen und zeig mir zuerst den konkreten Änderungsplan. Begleite mich bei den nötigen Anmeldungen und prüfe anschließend das Ergebnis.
-
-Das Paket funktioniert als Setup-Anleitung aus beiden Coding-Agenten. Zusätzlich enthält es native Claude- und Codex-Plugin-Manifeste für den Setup-Skill. Eine Marketplace-Installation ist für den Einstiegsprompt nicht nötig und wird durch den Installer nicht im Hintergrund vorgenommen.
+Direkt aus dem Quellcode: [INSTALL.md](INSTALL.md).
 
 ## Was das Setup übernimmt
 
-- Bestehendes Agentic OS und lokale Rollen/Skills erfassen.
-- Ausgewählte Rollen mit unverändertem Fachprompt für Codex bereitstellen.
+- Bestehendes Agentic OS, Second Brain, lokale Rollen, Skills und MCP-Namen erfassen (`discover`, `inspect`).
+- Das gemeinsame Gedächtnis verbinden: ein verwalteter Block in `<vault>/AGENTS.md` sagt Codex, wo der Gedächtnis-Index liegt und wie es dort schreibt; dein Vault wird in der Codex-Konfiguration als vertrauenswürdiges Projekt eingetragen. Liegt dein Second Brain außerhalb des Vaults, wird es als zusätzlicher Schreibpfad ergänzt.
+- Ausgewählte Rollen mit unverändertem Fachprompt als Codex-Profile bereitstellen.
 - Ausgewählte Skills in den Projekt-Skillordner übernehmen.
 - Ausgewählte unterstützte MCP-Verbindungen konfigurieren. Notion und Linear sind als OAuth-Rezepte enthalten.
-- Ein konkretes Paket mit Fingerprints, privaten Sicherungen und selektivem Rollback installieren.
-- Eigene Veränderungen und Konfigurationskonflikte erkennen und erhalten.
+- Alles als geprüften Plan mit Fingerprints, privaten Sicherungen und selektivem Rollback anwenden. Eigene Änderungen und Konflikte werden erkannt und erhalten.
 
-Login und Kontofreigaben erfolgen beim jeweiligen Anbieter. Die Einrichtung unterscheidet vorhandene Konfiguration, Anmeldung und tatsächlichen Tool-Test. Andere MCPs mit eigenen Prozessen, Headern oder Schlüsseln benötigen die passende native Einrichtung. Private Konfigurationen werden nicht mit dem Repository ausgeliefert.
+Login und Kontofreigaben erfolgen beim jeweiligen Anbieter. Der Installer ruft keine Modelle auf, erweitert keine globalen Zugriffsrechte über deinen Vault hinaus und kopiert keine Anmeldedateien.
 
 ## Voraussetzungen
 
-macOS, ein vorhandenes Agentic OS in einem lokalen Obsidian-Vault, Python ab 3.11 und ein nutzbarer Codex-CLI-Zugang. Das vorbereitete Release-Paket enthält die gebaute Obsidian-Erweiterung und ihre nativen Terminaldateien für Apple Silicon und Intel. Der native Terminaltest wurde auf Apple Silicon ausgeführt; Intel bleibt separat zu prüfen.
+macOS 13 oder neuer beziehungsweise Windows 10 ab Version 1809 (empfohlen Windows 11), ein vorhandenes Agentic OS in einem lokalen Obsidian-Vault, Python ab 3.11 und ein Codex-CLI-Zugang mit deinem ChatGPT-Konto. Entwickelt gegen Codex CLI 0.155.
 
-Die CLI- und MCP-Nutzung unterliegt deinem eigenen Konto. Der Installer selbst ruft keine Modelle auf. Er erweitert keine globalen Zugriffsrechte und kopiert keine Anmeldedateien.
+Der Codex-Transport läuft auf dem Mac über einen privaten Unix-Socket, unter Windows über einen lokalen WebSocket-Port mit Zufallstoken. Der Windows-Pfad wurde auf dem Mac im Windows-Modus verifiziert und nutzt die Terminaldateien des öffentlichen Agentic-OS-Plugins; ein Lauf auf einem echten Windows-Rechner steht noch aus und ist Teil des Beweislaufs im Setup-Prompt.
 
 ## Entwicklung
 
 ```sh
 cd host
-npm ci
+npm ci --ignore-scripts --no-audit --no-fund
 npm run build
 npm test
 cd ..
 python3 -B -m unittest discover -s tests -v
 python3 -B -m unittest integrations.test_planner -v
-python3 scripts/package.py --output .local/agentic-os-codex-addon-0.1.0.zip
+python3 scripts/package.py --output .local/agentic-os-codex-addon-0.2.0.zip
 ```
 
-`host/build` ist ein isoliertes Build-Verzeichnis. Kein Build-Befehl installiert oder lädt ein aktives Obsidian-Plugin neu. Der Source-Checkout enthält noch kein Build. Für die Einrichtung aus dem öffentlichen Repository sind deshalb Node.js und npm sowie die oben genannten Build-Schritte erforderlich.
+`host/build` ist ein isoliertes Build-Verzeichnis. Kein Build-Befehl installiert oder lädt ein aktives Obsidian-Plugin neu.
 
-Details stehen in [INSTALL.md](INSTALL.md), [Integrationen](integrations/README.md) und [Abnahme](docs/VERIFICATION.md).
+Details: [INSTALL.md](INSTALL.md), [Integrationen](integrations/README.md), [Host](host/README.md), [Abnahme](docs/VERIFICATION.md), [Release-Notes](docs/RELEASE-NOTES.md).

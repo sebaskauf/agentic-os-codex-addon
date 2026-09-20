@@ -17,7 +17,7 @@ def package(output: Path):
     if not (ROOT / "host/build/main.js").is_file():
         raise ValueError("Build host/ before packaging")
     files = []
-    for name in ["README.md", "INSTALL.md", "LICENSE", ".codex-plugin", ".claude-plugin", "skills", "docs", "scripts", "integrations", "host/build"]:
+    for name in ["README.md", "INSTALL.md", "SETUP-PROMPT.md", "LICENSE", ".codex-plugin", ".claude-plugin", "skills", "docs", "scripts", "integrations", "host/build"]:
         source = ROOT / name
         if not source.exists():
             raise ValueError(f"Required package input missing: {name}")
@@ -32,14 +32,14 @@ def package(output: Path):
             if item.suffix in {".md", ".json", ".py", ".js", ".cjs", ".toml"}:
                 text = content.decode("utf-8")
                 # Source code regex literals may contain the marker. Actual paths/keys must not.
-                if re.search(r"/Users/[A-Za-z0-9._-]+/|sk-ant-[A-Za-z0-9_-]{15,}|ghp_[A-Za-z0-9]{20,}|xoxb-[0-9A-Za-z-]{20,}", text):
+                if re.search(r"/Users/[A-Za-z0-9._-]+/|[A-Za-z]:\\Users\\[^\\]+\\|sk-ant-[A-Za-z0-9_-]{15,}|ghp_[A-Za-z0-9]{20,}|xoxb-[0-9A-Za-z-]{20,}", text):
                     raise ValueError(f"Potential private path or credential in {relative}")
             files.append((relative, item, content))
     index = {relative: hashlib.sha256(content).hexdigest() for relative, _, content in files}
     output.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(output, "x", compression=zipfile.ZIP_DEFLATED) as archive:
         for relative, item, content in files:
-            info = zipfile.ZipInfo("agentic-os-codex-addon/" + relative, (2026, 9, 9, 0, 0, 0))
+            info = zipfile.ZipInfo("agentic-os-codex-addon/" + relative, (2026, 9, 20, 0, 0, 0))
             info.external_attr = (stat.S_IFREG | stat.S_IMODE(item.stat().st_mode)) << 16
             archive.writestr(info, content, compress_type=zipfile.ZIP_DEFLATED)
         archive.writestr("agentic-os-codex-addon/PACKAGE-SHA256.json", json.dumps(index, indent=2) + "\n")

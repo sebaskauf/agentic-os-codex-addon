@@ -1,45 +1,94 @@
-# Optionaler Codex-Host für Agentic OS
+# Codex-Host für Agentic OS
 
-Version 0.1.0 ist ein eigenes Obsidian-Plugin neben dem bestehenden Agentic OS. Es verändert keine Dateien des Hauptplugins und startet beim Laden oder Wiederherstellen eines Fensters keinen Prozess. Erst der Klick auf „Codex starten“ öffnet den nativen Codex-Terminalclient. Die Installation allein aktiviert auch keine Obsidian-Community-Plugins.
+`host/` ist das Obsidian-Companion-Plugin `agentic-os-codex`, Version 0.2.0. Es läuft neben deinem bestehenden Agentic OS, verändert keine Datei des Hauptplugins und startet beim Laden oder Wiederherstellen eines Fensters keinen Prozess. Erst der Klick auf „Codex starten“ öffnet den nativen Codex-Terminalclient. Die Installation allein aktiviert das Plugin nicht.
 
 ## Funktionsumfang
 
-Das Plugin stellt einen eigenen Codex-Terminaltab mit Rollenprofil-Auswahl, Arbeitsordner, Stoppen und Wiederaufnahme einer nativ bestätigten Sitzung bereit. Wenn das bestehende Agentic OS den Befehl `agentic-os:open-terminal-pane` registriert, öffnet „Claude in Agentic OS“ dessen bestehendes Claude-Terminal. Fehlt dieser Befehl, bleibt der Button deaktiviert und die Oberfläche erklärt die eingeschränkte Verbindung.
+Ein eigener Codex-Terminaltab mit Leiste: Claude-Button, Profil-Auswahl, Arbeitsordner, „Codex starten“, „Stoppen“ und „Sitzung fortsetzen“. Der Claude-Button öffnet das Terminal des bestehenden Agentic OS, wenn dessen Befehl `agentic-os:open-terminal-pane` registriert ist; fehlt er, bleibt der Button deaktiviert. Der Provider-Wechsel läuft über getrennte Tabs, nicht im Chat-Drawer des Hauptplugins. Ein späterer Adapter kann den öffentlichen Befehl `agentic-os-codex:open-terminal` aufrufen.
 
-Der Provider-Wechsel findet in v0.1 über getrennte Tabs statt. Dies ist keine Integration in den bestehenden ChatDrawer, keine Kopie von Sebastians Dashboard und keine automatische Anpassung eigener Dashboard-Komponenten. Standard- und Fork-Installationen bleiben unverändert. Ein späterer Adapter kann den öffentlichen Befehl `agentic-os-codex:open-terminal` aufrufen.
+Die Profilliste stammt aus `CODEX_HOME/NAME.config.toml`, Standard `~/.codex`. Der Host startet `codex -p NAME` und übergibt dieselben TOML-Werte an den App-Server, der selbst kein `-p` kennt. Der Setup-Planer im übergeordneten Paket erzeugt diese Profile aus den ausdrücklich ausgewählten Rollen.
 
-Die Rollenliste stammt aus `CODEX_HOME/NAME.config.toml`, standardmäßig `~/.codex`. Der Host startet `codex -p NAME` und übergibt dieselben TOML-Werte an den eigenen App-Server, da dieser kein `-p` besitzt. Der Setup-Planer im übergeordneten Paket erzeugt diese Profile aus den ausdrücklich ausgewählten Rollen. Ein solches Hauptrollenprofil ist von einer nativen Codex-Subagent-Registrierung zu unterscheiden.
+Berechtigungen, Modelle und MCPs kommen aus der eigenen Codex-Konfiguration. Das Plugin vergibt keine weiteren Arbeitsordner, kopiert keine Konten und setzt keinen unbeschränkten Modus. Sitzungseinträge enthalten nur Ordner, Profil und eine bestätigte native Thread-ID, keine Chattexte. Leere Threads ohne User-Turn werden nicht zur Wiederaufnahme angeboten.
 
-Berechtigungen, Modelle und MCPs stammen aus der eigenen Codex-Konfiguration. Das Plugin vergibt keine weiteren Arbeitsordner, kopiert keine Konten und setzt keinen unbeschränkten Modus. Sitzungseinträge enthalten nur Ordner, Profil und eine bestätigte native Thread-ID. Es werden keine Chattexte aufgezeichnet. Leere, noch nicht durch einen User-Turn persistierte Threads werden nicht als wiederaufnehmbar angeboten.
+## Plattformen
 
-## Installation und Build
+| Plattform | Ordner in `host/native/` | Stand 20.09.2026 |
+|---|---|---|
+| macOS Apple Silicon | `darwin-arm64` | alle Tests grün, Entwicklungsplattform |
+| macOS Intel | `darwin-x64` | Prebuild enthalten, Ausführung nicht geprüft |
+| Windows x64 | `win32-x64` | Prebuild enthalten, kein Lauf auf echtem Windows-Rechner |
+| Windows ARM | `win32-arm64` | Prebuild enthalten, kein Lauf auf echtem Windows-Rechner |
+| Linux | keiner | startet keinen Prozess |
 
-Im Ordner `host` ausführen.
+Alle vier Ordner enthalten node-pty 1.1.0 (`package.json`, `lib/`, `prebuilds/`), dazu `LICENSE-node-pty`. Die beiden Windows-Ordner stammen aus dem öffentlichen Agentic-OS-Plugin v0.2.2 und enthalten dessen ConPTY-Patch `lib/windowsConoutConnection.js`. Der Patch ist nötig, weil Obsidians Electron-Renderer keine `worker_threads` erlaubt. Es wird kein natives Paket aus dem installierten Agentic OS geladen. Fehlt der Ordner für die eigene Plattform, meldet das Plugin sichtbar „Terminalpaket fehlt“.
+
+## Bridge-Transporte (`src/codexBridge.ts`)
+
+**macOS:** privates Unix-Socket-Paar unter `/tmp/aos-codex-*` (Ordner 0700, Sockets 0600), unverändert seit 0.1.0.
+
+**Windows:** Loopback-WebSocket. Der Host startet den App-Server mit
+
+```
+codex app-server --listen ws://127.0.0.1:<Port> --ws-auth capability-token --ws-token-file <privat>
+```
+
+Die TUI verbindet über
+
+```
+codex --remote ws://127.0.0.1:<Frontport> --remote-auth-token-env AGENTIC_OS_CODEX_TOKEN
+```
+
+Das Token wird der TUI nur als Umgebungsvariable übergeben, nie als Argument. Ohne Token antwortet der App-Server mit 401. Prozessende unter Windows über `taskkill /t`.
+
+`AGENTIC_OS_CODEX_TRANSPORT=ws|unix` erzwingt einen Transport unabhängig von der Plattform. Damit wurde der WebSocket-Pfad auf macOS geprüft.
+
+## Binärsuche (`src/platform.ts`)
+
+macOS: `codex` aus PATH plus typische Benutzer- und Homebrew-Pfade. Windows: `codex.exe` aus PATH, `%APPDATA%\npm` und dem npm-Paketlayout `@openai/codex-win32-<arch>`. `CODEX_BIN` und `CODEX_CLI_PATH` überschreiben die Suche. npm-`.cmd`-Shims startet der Host über `cmd.exe /d /s /c`, Pfade mit Leerzeichen werden dabei in Anführungszeichen gesetzt. Argumente, die selbst Anführungszeichen enthalten, lehnt er ab.
+
+## Build
+
+Im Ordner `host`:
 
 ```sh
-npm ci --ignore-scripts --no-audit --no-fund
+npm ci --ignore-scripts
 npm run build
 npm test
 ```
 
-Der Build schreibt ausschließlich nach `host/build`. Der übergeordnete Installer übernimmt den gesamten Inhalt in den neuen Vault-Ordner `.obsidian/plugins/agentic-os-codex`. Er ersetzt keine Agentic-OS-Quelldateien. Der enthaltene `build-manifest.json` dokumentiert SHA-256, Größe und Dateimodus für alle anderen Build-Dateien.
+`npm run build` prüft TypeScript (`tsc --noEmit`) und schreibt ausschließlich nach `host/build`: `main.js`, `styles.css`, `manifest.json`, `native/` mit allen vier Ordnern, die Lizenzdateien und `build-manifest.json` (SHA-256, Größe und Dateimodus jeder anderen Build-Datei). Der Installer kopiert `host/build` in den Vault-Ordner `.obsidian/plugins/agentic-os-codex` und ersetzt keine Agentic-OS-Datei. Kein Build-Befehl lädt ein aktives Plugin neu.
 
-Obsidian anschließend öffnen, das neue Plugin bewusst aktivieren und den Befehl „Agentic OS Codex · Codex-Terminal öffnen“ ausführen. Dann Arbeitsordner und optionales Rollenprofil wählen und starten. Die interne Eigenschaft `enabled` ist lediglich der gespeicherte Hinweis, dass das Mitglied schon einmal eine Sitzung gestartet hat. Sie ist keine zweite Freischaltung und startet keine Prozesse.
+Das Release-Asset `agentic-os-codex-addon.zip` enthält `host/build` fertig gebaut. Mitglieder brauchen weder Node noch npm; die Befehle oben gelten nur für den Source-Checkout.
 
-Codex muss lokal installiert und angemeldet sein. `CODEX_BIN` kann einen abweichenden Binärpfad festlegen. Die Binärsuche ergänzt typische Benutzer- und Homebrew-Pfade. Das Paket bündelt `node-pty` 1.1.0 für `darwin-arm64` und `darwin-x64`; es wird kein natives Paket aus dem bestehenden Agentic OS geladen. Fehlende native Dateien führen zu einer sichtbaren Fehlermeldung.
+## Tests
 
-## Verifiziert und noch offen
+`npm test` führt 10 Tests aus, alle grün auf macOS Apple Silicon am 20.09.2026:
 
-Am 9. September 2026 bestanden TypeScript-Build und acht Tests. Die Prüfungen decken Rollenübergabe, unveränderte Berechtigungen, sichere Thread-Zuordnung, ungültige gespeicherte IDs, leere Threads, einen echten `printf`-Aufruf durch das gebündelte ARM64-PTY sowie den Start des echten lokalen Codex-App-Servers mit isoliertem `CODEX_HOME` und privaten Sockets ab. Es wurde kein Modellturn gestartet.
+1. Frischer Zustand ist opt-in, ohne Session und ohne persönlichen Default.
+2. Nicht vertrauenswürdige gespeicherte Identitäten erzeugen keinen Resume-Befehl.
+3. Der Start hält sich exakt ans Profil, ohne Rechte oder Arbeitsordner zu erweitern.
+4. Nur die korrelierte letzte native Antwort darf einen Thread wählen, keine Hintergrund-Agenten.
+5. Ein Observer-Fehler entwertet die vorherige Identität, statt eine alte Sitzung fortzusetzen.
+6. Das gebündelte macOS-PTY führt einen harmlosen Befehl aus (nur macOS).
+7. Ein echter lokaler Codex-App-Server öffnet private Unix-Sockets, ohne Modellturn (nur macOS).
+8. Leere native Threads sind keine dauerhaften Resume-Ziele.
+9. Neu: `.cmd`-Shims werden für `cmd.exe` gewrappt, Pfade mit Leerzeichen gequotet, Argumente mit Anführungszeichen abgelehnt. `supportedPlatform()` ist nur auf macOS und Windows wahr.
+10. Neu: WebSocket-Bridge mit Capability-Token. Echter App-Server, Token mit 64 Hex-Zeichen nur in der Umgebung, Handshake ohne Token bekommt 401, eine echte TUI über das gebündelte PTY verbindet mit Token und zeigt das Codex-Banner (übersprungen auf Linux).
 
-Die tatsächliche Oberfläche des Build-Bundles wurde im Browser mit simulierten Obsidian-APIs gerendert und manuell betrachtet. Rollenwahl funktioniert; Screenshot liegt unter `test/ui-preview.png`. Die Vorschau lässt sich aus `host` mit `python3 -m http.server 8937 --bind 127.0.0.1` starten und unter `/test/preview.html` öffnen.
+Die Tests starten keinen Modellturn.
 
-Eine separate Obsidian-Instanz mit Testvault und eigenem User-Data-Verzeichnis wurde vorbereitet. Der gestartete Obsidian-Prozess beendete sich sofort; die UI-Steuerung fand nur das produktive Fenster. Dort wurde nichts bedient. Eine erfolgreiche native Obsidian-Abnahme ist damit noch nicht belegt. Ebenfalls offen sind Intel-Mac-Ausführung, ein vollständiger Modellturn, Wiederaufnahme nach echtem Obsidian-Neustart und memberbezogene OAuth/MCP-Funktionstests.
+## Grenzen (Stand 20.09.2026)
 
-Diese Pilotversion sperrt Prozessstarts unter Windows und Linux. Die übernommene Identitätsbridge benötigt Unix-Sockets. Windows-Unterstützung des ursprünglichen Agentic OS sagt nichts über diese Erweiterung aus.
+- Kein Lauf auf einem echten Windows-Rechner. Der WebSocket-Transport wurde auf macOS im Windows-Modus verifiziert; die ConPTY-Prebuilds sind die des öffentlichen Agentic-OS-Plugins.
+- Intel-Mac: Prebuild enthalten, nicht ausgeführt.
+- Linux: kein Prozessstart.
+- Abnahme in der echten Obsidian-Oberfläche: durch die Mitglieder über den Beweislauf in [SETUP-PROMPT.md](../SETUP-PROMPT.md), Schritt 7 (Codex nennt den Gedächtnis-Index, schreibt einen Testeintrag, den Claude liest, Sitzung fortsetzen).
+- Codex-CLI-Basis ist 0.155.x (stabil 0.155.1 vom 18.09.2026). Andere Versionen brauchen einen Laufzeittest, vor allem für `app-server`, `--listen` und `--remote`.
 
 ## Herkunft und Lizenzen
 
-`codexBridge.ts`, `codexProfile.ts`, `sessionIdentity.ts` und `providers/` wurden aus der bereits lokal getesteten Agentic-OS-Codex-Integration übernommen. `platform.ts`, Zustand und UI sind portable Implementierungen dieses Pakets. Keine persönliche Konfiguration, kein Dashboard-Datensatz und keine privaten Arbeitsordner werden ausgeliefert.
+`codexBridge.ts`, `codexProfile.ts`, `sessionIdentity.ts` und `providers/` stammen aus der lokal getesteten Agentic-OS-Codex-Integration. `platform.ts`, Zustand und UI sind portable Implementierungen dieses Pakets. Keine persönliche Konfiguration, kein Dashboard-Datensatz und keine privaten Arbeitsordner werden ausgeliefert.
 
-`src/vendor/smol-toml` enthält smol-toml 1.8.0 einschließlich BSD-3-Clause-Lizenz und Paketmetadaten. `native` enthält die node-pty-1.1.0-Paketdateien und macOS-Prebuilds aus derselben Integration sowie `LICENSE-node-pty`. Der Build bündelt xterm 6.0.0 und addon-fit 0.11.0 unter MIT. Deren Lizenzdateien werden im Build mitgeliefert. Release-Artefakte sollten nur aus diesem gepinnten Build veröffentlicht werden.
+`src/vendor/smol-toml` enthält smol-toml 1.8.0 mit BSD-3-Clause-Lizenz und Paketmetadaten. `native/` enthält node-pty 1.1.0 mit Prebuilds für vier Plattformen und `LICENSE-node-pty`. Der Build bündelt xterm 6.0.0 und addon-fit 0.11.0 unter MIT; die Lizenzdateien liegen im Build bei. Release-Artefakte nur aus diesem gepinnten Build veröffentlichen.
+
+Übergeordnet: [README.md](../README.md), [INSTALL.md](../INSTALL.md), [docs/VERIFICATION.md](../docs/VERIFICATION.md).

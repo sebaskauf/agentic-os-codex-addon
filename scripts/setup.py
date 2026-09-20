@@ -17,7 +17,9 @@ from datetime import datetime, timezone
 
 ROOT = Path(__file__).resolve().parents[1]
 PLUGIN_ID = "agentic-os-codex"
-VERSION = "0.1.0"
+VERSION = "0.2.0"
+SUPPORTED_HOST_PLATFORMS = {"darwin", "win32"}
+CONFIG_DIR = ".obsidian"
 
 
 class SetupError(Exception):
@@ -59,10 +61,22 @@ def context(vault: Path, home: Path) -> tuple[Path, Path]:
     return vault, home
 
 
+def config_dir(vault: Path) -> str:
+    """Obsidian's config folder is .obsidian unless the member renamed it; detect by the base plugin."""
+    if (vault / CONFIG_DIR).is_dir():
+        return CONFIG_DIR
+    for entry in sorted(vault.iterdir()):
+        if entry.is_dir() and not entry.is_symlink() and (entry / "plugins/agentic-os/manifest.json").is_file():
+            return entry.name
+    return CONFIG_DIR
+
+
 def allowed_target(path: Path, vault: Path, home: Path) -> Path:
     path = regular_path(path)
-    allowed = [vault / ".obsidian/plugins" / PLUGIN_ID,
+    allowed = [vault / config_dir(vault) / "plugins" / PLUGIN_ID,
                vault / ".agents/skills", home / ".codex"]
+    if path == regular_path(vault / "AGENTS.md"):
+        return path
     if not any(path.is_relative_to(root) and path != root for root in allowed):
         raise SetupError(f"Target outside the selected installation scope: {path}")
     # Authentication state is owned exclusively by the native applications.
@@ -71,18 +85,101 @@ def allowed_target(path: Path, vault: Path, home: Path) -> Path:
     return path
 
 
+def obsidian_config_file(home: Path) -> Path:
+    if sys.platform == "darwin":
+        return home / "Library/Application Support/obsidian/obsidian.json"
+    if sys.platform == "win32":
+        appdata = os.environ.get("APPDATA")
+        return (Path(appdata) if appdata else home / "AppData/Roaming") / "obsidian/obsidian.json"
+    xdg = os.environ.get("XDG_CONFIG_HOME")
+    return (Path(xdg) if xdg else home / ".config") / "obsidian/obsidian.json"
+
+
+def binaries() -> dict:
+    found = {name: shutil.which(name) for name in ("claude", "codex", "node", "npm", "git", "python3", "python", "py")}
+    return found
+
+
+def codex_version(codex: str | None) -> str | None:
+    if not codex:
+        return None
+    try:
+        run = subprocess.run([codex, "--version"], capture_output=True, text=True, timeout=15)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return (run.stdout or run.stderr).strip().splitlines()[0] if (run.stdout or run.stderr).strip() else None
+
+
+def discover(home: Path) -> dict:
+    """Find Obsidian vaults and tools before a vault is chosen. Read-only."""
+    home = home.expanduser().resolve()
+    source = obsidian_config_file(home)
+    data = read_json(source, {}) if source.is_file() else {}
+    vaults = []
+    entries = data.get("vaults", {}) if isinstance(data, dict) else {}
+    for entry in (entries.values() if isinstance(entries, dict) else []):
+        path = entry.get("path") if isinstance(entry, dict) else None
+        if not isinstance(path, str):
+            continue
+        folder = Path(path)
+        cfg = config_dir(folder) if folder.is_dir() else CONFIG_DIR
+        vaults.append({"path": str(folder), "exists": folder.is_dir(), "open": bool(entry.get("open")),
+                       "agentic_os": (folder / cfg / "plugins/agentic-os/manifest.json").is_file(),
+                       "companion": (folder / cfg / "plugins" / PLUGIN_ID / "manifest.json").is_file(),
+                       "claude_md": (folder / "CLAUDE.md").is_file(),
+                       "memory_index": (folder / "memory/MEMORY.md").is_file()})
+    tools = binaries()
+    return {"schema": 1, "version": VERSION, "home": str(home), "platform": sys.platform,
+            "architecture": platform.machine(), "python": platform.python_version(),
+            "supported_host_install": sys.platform in SUPPORTED_HOST_PLATFORMS,
+            "obsidian_config": str(source), "obsidian_config_found": source.is_file(),
+            "vaults": vaults, "binaries": tools, "codex_version": codex_version(tools["codex"])}
+
+
+def mcp_names(home: Path, vault: Path) -> list[str]:
+    names = set()
+    for path in [home / ".claude.json", vault / ".mcp.json"]:
+        if not path.is_file() or path.is_symlink():
+            continue
+        try:
+            servers = json.loads(path.read_text(encoding="utf-8")).get("mcpServers", {})
+        except (ValueError, OSError, AttributeError):
+            continue
+        if isinstance(servers, dict):
+            names.update(name for name in servers if isinstance(name, str))
+    return sorted(names)
+
+
+def brain_state(vault: Path) -> dict:
+    settings = read_json(vault / ".claude/settings.json", {}) if (vault / ".claude/settings.json").is_file() else {}
+    auto = settings.get("autoMemoryDirectory") if isinstance(settings, dict) else None
+    agents_md = vault / "AGENTS.md"
+    text = agents_md.read_text(encoding="utf-8", errors="replace") if agents_md.is_file() else ""
+    return {"claude_md": (vault / "CLAUDE.md").is_file(), "agents_md": agents_md.is_file(),
+            "addon_block": "<!-- BEGIN AGENTIC OS CODEX ADDON -->" in text,
+            "memory_index": (vault / "memory/MEMORY.md").is_file(),
+            "auto_memory_directory": auto if isinstance(auto, str) else None}
+
+
 def inventory(vault: Path, home: Path) -> dict:
     vault, home = context(vault, home)
-    base = vault / ".obsidian/plugins/agentic-os"
+    cfg = config_dir(vault)
+    base = vault / cfg / "plugins/agentic-os"
     manifest = read_json(base / "manifest.json", {})
     sources = base / "src"
-    enabled = read_json(vault / ".obsidian/community-plugins.json", [])
+    enabled = read_json(vault / cfg / "community-plugins.json", [])
     if not isinstance(enabled, list):
         raise SetupError("Obsidian community-plugins.json is not a list")
+    tools = binaries()
     result = {
         "schema": 1, "version": VERSION, "vault": str(vault), "home": str(home),
-        "platform": sys.platform, "architecture": platform.machine(),
-        "supported_host_install": sys.platform == "darwin",
+        "config_dir": cfg,
+        "platform": sys.platform, "architecture": platform.machine(), "python": platform.python_version(),
+        "supported_host_install": sys.platform in SUPPORTED_HOST_PLATFORMS,
+        "host_native_available": (ROOT / "host/build/native" / f"{sys.platform}-{'arm64' if platform.machine().lower() in {'arm64', 'aarch64'} else 'x64'}" / "lib/index.js").is_file(),
+        "brain": brain_state(vault),
+        "mcps": mcp_names(home, vault),
+        "codex_version": codex_version(tools["codex"]),
         "agentic_os": {"present": base.is_dir(), "version": manifest.get("version"),
                        "enabled": "agentic-os" in enabled,
                        "has_sources": sources.is_dir(),
@@ -90,7 +187,7 @@ def inventory(vault: Path, home: Path) -> dict:
                        "main_sha256": digest((base / "main.js").read_bytes()) if (base / "main.js").is_file() else None},
         "companion": {"present": (base.parent / PLUGIN_ID / "manifest.json").is_file(),
                       "enabled": PLUGIN_ID in enabled},
-        "binaries": {name: shutil.which(name) for name in ("claude", "codex", "node")},
+        "binaries": tools,
         "agents": [], "skills": [],
     }
     for kind in ("agents", "skills"):
@@ -116,7 +213,7 @@ def host_changes(vault: Path) -> list[dict]:
     if meta.get("id") != PLUGIN_ID:
         raise SetupError("Unexpected host plugin id")
     changes = []
-    plugin = vault / ".obsidian/plugins" / PLUGIN_ID
+    plugin = vault / config_dir(vault) / "plugins" / PLUGIN_ID
     ownership_path = regular_path(plugin / ".addon-owned.json")
     ownership = read_json(ownership_path, {"files": {}})
     fingerprints = {}
@@ -144,7 +241,8 @@ def host_changes(vault: Path) -> list[dict]:
     return changes
 
 
-def make_plan(vault: Path, home: Path, mode: str, agents: list[str], skills: list[str], mcps: list[str]) -> dict:
+def make_plan(vault: Path, home: Path, mode: str, agents: list[str], skills: list[str], mcps: list[str],
+              brain: Path | None = None, shared_brain: bool = True) -> dict:
     vault, home = context(vault, home)
     info = inventory(vault, home)
     if mode == "claude-only":
@@ -152,15 +250,20 @@ def make_plan(vault: Path, home: Path, mode: str, agents: list[str], skills: lis
     configured_home = os.environ.get("CODEX_HOME")
     if home == Path.home().resolve() and configured_home and Path(configured_home).expanduser().resolve() != home / ".codex":
         raise SetupError("Custom CODEX_HOME requires a dedicated migration; no standard-home changes planned")
-    if sys.platform != "darwin":
-        raise SetupError("Codex companion installation is currently macOS-only; inspect works on other platforms")
+    if sys.platform not in SUPPORTED_HOST_PLATFORMS:
+        raise SetupError("Codex companion installation supports macOS and Windows; inspect works on other platforms")
     if not info["agentic_os"]["present"]:
         raise SetupError("Install the base Agentic OS first, then rerun this optional setup")
-    if not (vault / ".obsidian/plugins/agentic-os/main.js").is_file():
+    if not (vault / info["config_dir"] / "plugins/agentic-os/main.js").is_file():
         raise SetupError("Base Agentic OS main.js is missing; repair the base installation first")
     sys.path.insert(0, str(ROOT))
     from integrations.planner import build_changes
-    planned = build_changes(home, vault, agents, skills, mcps)
+    brain_root = None
+    if shared_brain:
+        brain_root = (brain.expanduser().resolve() if brain is not None else vault)
+        if not brain_root.is_dir():
+            raise SetupError("Second Brain folder does not exist")
+    planned = build_changes(home, vault, agents, skills, mcps, brain_root)
     changes = host_changes(vault) + planned["changes"]
     seen = set()
     filtered = []
@@ -182,6 +285,20 @@ def make_plan(vault: Path, home: Path, mode: str, agents: list[str], skills: lis
     ])
     return {"inventory": info, "mode": mode, "changes": filtered,
             "statuses": planned["statuses"], "manual_steps": steps}
+
+
+def restrict_windows_acl(path: Path) -> None:
+    """POSIX modes mean nothing on Windows; keep plan snapshots private via an explicit ACL (best effort)."""
+    if sys.platform != "win32":
+        return
+    user = os.environ.get("USERNAME") or os.environ.get("USER")
+    if not user:
+        return
+    try:
+        subprocess.run(["icacls", str(path), "/inheritance:r", "/grant:r", f"{user}:(OI)(CI)F"],
+                       capture_output=True, timeout=30, check=False)
+    except (OSError, subprocess.TimeoutExpired):
+        pass
 
 
 def atomic_write(path: Path, data: bytes, mode: int = 0o600):
@@ -208,6 +325,7 @@ def stage(plan: dict, output: Path) -> dict:
     regular_path(output / "manifest.json")
     output.mkdir(parents=True, mode=0o700)
     os.chmod(output, 0o700)
+    restrict_windows_acl(output)
     payload = output / "payload"
     payload.mkdir(mode=0o700)
     files = []
@@ -265,8 +383,8 @@ def write_state(folder: Path, state: dict):
 def apply(folder: Path, expected_sha: str) -> dict:
     folder = folder.expanduser().absolute()
     manifest, operations = load_plan(folder, expected_sha)
-    if manifest["mode"] == "codex" and sys.platform != "darwin":
-        raise SetupError("Codex host installation is currently macOS-only")
+    if manifest["mode"] == "codex" and sys.platform not in SUPPORTED_HOST_PLATFORMS:
+        raise SetupError("Codex host installation supports macOS and Windows")
     lock = folder / "transaction.lock"
     regular_path(lock)
     try:
@@ -389,13 +507,19 @@ def doctor(vault: Path, home: Path) -> dict:
             login = "authenticated" if run.returncode == 0 else "login-required"
         except (OSError, subprocess.TimeoutExpired):
             login = "check-failed"
+    brain = info["brain"]
     return {"inventory": info, "codex_login": login, "runtime_test": "pending-user-session",
-            "mcp_tool_tests": "not-run", "note": "Installed/configured/authenticated does not mean functionally tested"}
+            "mcp_tool_tests": "not-run",
+            "brain_link": "configured" if brain["addon_block"] else "missing",
+            "companion_enabled": info["companion"]["enabled"],
+            "note": "Installed/configured/authenticated does not mean functionally tested"}
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
+    d = sub.add_parser("discover", help="Find Obsidian vaults, tools and versions before choosing a vault")
+    d.add_argument("--home", type=Path, default=Path.home())
     for name in ("inspect", "plan", "doctor"):
         p = sub.add_parser(name)
         p.add_argument("--vault", type=Path, required=True)
@@ -405,6 +529,8 @@ def main():
             p.add_argument("--agent", action="append", default=[])
             p.add_argument("--skill", action="append", default=[])
             p.add_argument("--mcp", action="append", default=[])
+            p.add_argument("--brain", type=Path, default=None, help="Second Brain folder if it is not the vault itself")
+            p.add_argument("--no-brain", action="store_true", help="Skip the shared-memory link (AGENTS.md, project trust)")
             p.add_argument("--output", type=Path, required=True)
     for name in ("apply", "rollback"):
         p = sub.add_parser(name)
@@ -412,10 +538,13 @@ def main():
         p.add_argument("--sha256", required=True)
     args = parser.parse_args()
     try:
-        if args.command == "inspect":
+        if args.command == "discover":
+            result = discover(args.home)
+        elif args.command == "inspect":
             result = inventory(args.vault, args.home)
         elif args.command == "plan":
-            result = stage(make_plan(args.vault, args.home, args.mode, args.agent, args.skill, args.mcp), args.output)
+            result = stage(make_plan(args.vault, args.home, args.mode, args.agent, args.skill, args.mcp,
+                                     args.brain, not args.no_brain), args.output)
         elif args.command == "doctor":
             result = doctor(args.vault, args.home)
         elif args.command == "apply":

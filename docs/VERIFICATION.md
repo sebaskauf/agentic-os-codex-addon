@@ -1,29 +1,69 @@
-# Abnahmestand der Pilotfassung
+# Abnahmestand 0.2.0
 
-Stand 09.09.2026. Getestet auf macOS Apple Silicon mit Codex CLI 0.153.4. Keine Installation in einem produktiven Vault und keine Modellanfrage für diese Abnahme.
+Stand 20.09.2026. Alles Folgende lief auf macOS Apple Silicon. Codex-CLI-Basis 0.155.x. Keine Installation in einem produktiven Vault, kein Modellturn in den automatisierten Tests.
 
-## Bestandene Prüfungen
+## Was verifiziert wurde
 
-13 Installer-Tests prüfen Staging, Manifest- und Payload-Manipulation, Pfadgrenzen, Symlinks, Anmeldedateien, Abbruchjournal, Drift vor Installation, spätere Member-Änderungen, idempotentes Apply und selektiven Rollback. Ein vollständiger Test installiert das echte Host-Bundle samt Rolle, Skill und Notion-Konfiguration in einen künstlichen Member-Vault. Der vorhandene angepasste Basiscode und die eigenen Einstellungen bleiben bytegleich. Ein zweiter Plan hat null Änderungen. Rollback stellt die ursprüngliche Codex-Konfiguration wieder her.
+### Host (10 Tests)
 
-15 Integrations-Tests prüfen unveränderte Fachprompts einschließlich Zeilenumbrüchen, TOML-Erhalt, Konflikte, bestehende deaktivierte MCPs, Secret-Filter, Auswahl ohne implizite Deinstallation und ausführbare Skill-Dateien.
+```sh
+cd host
+npm ci --ignore-scripts
+npm run build
+npm test
+```
 
-Ein zusätzlicher nativer Profiltest bestätigt, dass Codex CLI 0.153.4 die erzeugte NAME.config.toml über `-p NAME` tatsächlich lädt. Absichtlich nicht existierende Modellanbieter sorgen für einen lokalen Fehler, bevor ein Modellaufruf möglich ist.
+Ergebnis: 10 Tests grün, TypeScript-Check und isolierter Build bestanden. Abgedeckt wie in 0.1.0: Zustand ohne automatischen Start, keine Rechteausweitung durch Profile, sichere Thread-Zuordnung, ungültige gespeicherte IDs, Observer-Fehler, leere Threads, ein echter harmloser Befehl über das gebündelte ARM64-PTY, ein echter Codex-App-Server mit privaten Unix-Sockets.
 
-Acht Host-Tests prüfen Zustand ohne automatischen Start, Argumente ohne zusätzliche Rechte, Thread-Zuordnung, ungültige Resume-Ziele, einen echten ARM64-Terminalprozess mit harmlosem Kommando und einen echten Codex-App-Server mit privaten Sockets ohne Modellturn. TypeScript und der isolierte Build bestehen.
+Neu in 0.2.0:
 
-Der Codex-Plugin-Validator und Skill-Validator bestehen. Das Paket wird aus einer Dateiliste erzeugt und auf konkrete private Benutzerpfade und typische Credential-Muster geprüft. Konfigurations-Snapshots und Testdaten sind nicht Teil des Release-Pakets. Diese Musterprüfung ersetzt keine Prüfung eigener später hinzugefügter Inhalte.
+- `.cmd`-Wrapping: ein npm-Shim wird zu `cmd.exe /d /s /c "<shim> <args>"`, Pfade mit Leerzeichen gequotet, ein Argument mit Anführungszeichen wirft. `supportedPlatform()` ist nur auf macOS und Windows wahr.
+- WebSocket-Pfad mit Token: mit `AGENTIC_OS_CODEX_TRANSPORT=ws` startet die Bridge einen echten `codex app-server --listen ws://127.0.0.1:<Port>` mit Capability-Token. Das Token (64 Hex-Zeichen) liegt nur in der Umgebung der TUI, die Argumente enthalten nur `--remote-auth-token-env`. Ein WebSocket-Handshake ohne Token bekommt 401. Eine zweite Bridge startet eine echte TUI über das gebündelte PTY mit `--remote` und `--remote-auth-token-env`; sie zeigt das Codex-Banner, und die Sitzungsidentität ist nicht `unavailable`. Das ist die Windows-Kette, ausgeführt auf macOS.
 
-## Visuelle Prüfung
+### Installer (19 Tests)
 
-Die Browser-Vorschau lädt das tatsächliche Plugin-Bundle mit nachgebildeten Obsidian-Schnittstellen. Oberfläche und Profilauswahl wurden visuell geprüft. Der Screenshot liegt im Source-Repo unter host/test/ui-preview.png.
+```sh
+python3 -B -m unittest discover -s tests
+```
 
-Der Versuch, Obsidian mit getrenntem User-Data-Verzeichnis und eigenem Test-Vault zu starten, endete unmittelbar. Die Computersteuerung fand anschließend nur die produktive Obsidian-Instanz. Dort wurden keine Aktionen durchgeführt. Die native Obsidian-Abnahme wurde daher nicht als bestanden gewertet.
+Ergebnis: 19 Tests grün. 18 in `tests/test_setup.py`, 1 End-to-End-Test in `tests/test_e2e.py` (echtes Host-Bundle plus Rolle, Skill und MCP in einen künstlichen Vault mit angepasstem Basiscode, Rollback bytegleich).
 
-## Vor Community-Freigabe offen
+Weiterhin geprüft: idempotentes Apply und Rollback, Preflight-Konflikt verhindert jedes Schreiben, Rollback verweigert spätere Member-Änderungen, manipuliertes Manifest oder Payload, Pfadgrenzen und Symlinks, keine Anmeldedateien, Claude-only ohne Codex, Linux darf inspizieren aber nicht installieren, private Stage-Ordner, unterbrochenes Apply mit Rollback, Companion-Änderungen blockieren ein Update, Companion-Installation lässt Basis und `data.json` unangetastet.
 
-Ein echter Obsidian-Installationslauf auf einem separaten Test- oder Member-Rechner, ein tatsächlicher Modellturn mit ausgewählter Rolle, MCP-Anmeldung und Leseaufruf mit dem Member-Konto sowie Resume nach Obsidian-Neustart stehen aus. Intel-Prebuilds werden mitgeliefert, ihre Ausführung wurde nicht geprüft. Windows und Linux sind für diesen Pilot gesperrt.
+Neu in 0.2.0:
 
-Die vorhandene ChatDrawer-Umschaltung, Cutting-Cockpit-Integration und automatische Memory-Nachverarbeitung aus Sebastians persönlichem Ausbau sind nicht Bestandteil dieser Companion-Fassung. Ein Mitglied erhält die zusätzliche Codex-Ansicht und die ausdrücklich ausgewählten Integrationen.
+- Windows-Plan mit Host und AGENTS.md.
+- Brain außerhalb des Vaults ergänzt `writable_roots` und den Projekt-Pointer.
+- AGENTS.md erhält vorhandenen Member-Text und ist rückbaubar.
+- `discover` listet Vaults aus `obsidian.json`.
+- `inspect` listet MCP-Namen ohne Secrets.
+- Umbenannter Config-Ordner wird erkannt.
 
-Der Stand ist ein technisch geprüftes Pilotpaket mit klaren Laufzeitgrenzen, keine vollständig abgenommene öffentliche Community-Veröffentlichung.
+### Planner (15 Tests)
+
+```sh
+python3 -B -m unittest integrations.test_planner
+```
+
+Ergebnis: 15 Tests grün. Unveränderte Fachprompts inklusive Zeilenumbrüchen, TOML-Erhalt, Konflikte, bestehende deaktivierte MCPs, Secret-Filter, Auswahl ohne implizite Deinstallation, ausführbare Skill-Dateien.
+
+### Summe
+
+44 Tests: 10 Host, 19 Installer, 15 Planner.
+
+### Paketprüfung
+
+`scripts/package.py` erzeugt das ZIP aus einer Dateiliste mit festem Zeitstempel 2026-09-20 und scannt Textdateien auf private Pfade (macOS-Benutzerordner und neu Windows-Profilpfade mit Laufwerk, Users und Benutzername) sowie typische Credential-Muster. Konfigurations-Snapshots und Testdaten sind nicht im Paket. Diese Musterprüfung ersetzt keine Prüfung später hinzugefügter Inhalte.
+
+## Was offen ist
+
+- **Echter Windows-Rechner.** Kein Lauf. Der WebSocket-Transport wurde auf macOS im Windows-Modus verifiziert, die ConPTY-Prebuilds (`win32-x64`, `win32-arm64`) sind die des öffentlichen Agentic-OS-Plugins v0.2.2 und wurden hier nicht ausgeführt. Offen sind damit: ConPTY-Start in Obsidian unter Windows, `codex.exe`-Suche auf einem echten System, `taskkill /t`, `icacls` auf Plan-Ordnern.
+- **Intel-Mac.** Prebuild `darwin-x64` enthalten, nicht ausgeführt.
+- **Linux.** Kein Prozessstart, bewusst.
+- **Native Obsidian-Abnahme.** Nicht in einer separaten Obsidian-Instanz belegt. Die Abnahme erfolgt durch die Mitglieder über den Beweislauf in `SETUP-PROMPT.md`, Schritt 7: Codex nennt den Gedächtnis-Index und zitiert daraus, schreibt `memory/codex-testlauf.md` samt Indexzeile, die Claude anschließend liest, dann „Stoppen“ und „Sitzung fortsetzen“ mit demselben Verlauf. Erst ein gemeldeter Abschlussbericht aus Schritt 8 zählt als bestandene Abnahme.
+- **Modellturn.** Kein Teil der automatisierten Tests. Der erste echte Turn ist Schritt 7 des Beweislaufs.
+- **MCP-Anmeldung und Leseaufruf** mit dem Member-Konto. Konfiguriert heißt nicht getestet.
+- **Nativer Profiltest** (`integrations/test_native_profile.py`) ist nicht Teil der 44 gezählten Tests.
+- **Chat-Drawer-Umschaltung** im Hauptplugin: nicht enthalten.
+
+Der Stand ist ein technisch geprüftes Paket für macOS mit einem vorbereiteten, auf macOS simulierten Windows-Pfad. Die Freigabe für Windows steht unter dem Vorbehalt des ersten echten Laufs.

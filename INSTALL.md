@@ -1,74 +1,82 @@
 # Einrichtung für den betreuenden Coding-Agenten
 
-Arbeite mit diesem konkreten Paket. Verwende keine privaten Pfade oder Zugangsdaten des Erstellers. Lies vor Änderungen den gesamten Ablauf.
+Arbeite mit diesem konkreten Paket. Verwende keine privaten Pfade oder Zugangsdaten des Erstellers. Der Ablauf für Mitglieder steht in `SETUP-PROMPT.md`; diese Datei erklärt die Werkzeuge dahinter.
 
-## Bestehendes Setup erfassen
+Alle Befehle laufen aus dem Paketordner. `python3` steht für den Python-Aufruf des Rechners (`python` oder `py -3` unter Windows). Unter Windows arbeitest du in PowerShell, ein Befehl je Zeile.
 
-Ermittle den tatsächlichen lokalen Obsidian-Vault und das Benutzerverzeichnis. Wenn mehrere Vaults infrage kommen, frage nach dem gewünschten. Codex ist optional. Wer bei Claude bleiben möchte, braucht keine Änderungen.
-
-Prüfe Python ab 3.11. Im Source-Checkout fehlt möglicherweise `host/build`. Baue dann isoliert mit `npm ci` und `npm run build` unter host/. Es gibt keinen Deploy-Hook. Das fertige Release-Paket enthält das Build bereits.
+## Bestandsaufnahme
 
 ```sh
+python3 scripts/setup.py discover
 python3 scripts/setup.py inspect --vault /absoluter/pfad/zum/vault
 ```
 
-Der Bericht enthält keine Agentenprompts oder MCP-Schlüssel. Er erkennt vorhandenen Basiscode, Quellzugriff, den Codex-Provider und lokale Rollen/Skills. Ein Fork wird nicht anhand seiner Versionsnummer für kompatibel erklärt. Der Zusatz installiert sich in einen separaten Plugin-Ordner und ersetzt den Basiscode nicht.
+`discover` liest Obsidians Vault-Liste (`obsidian.json` je Plattform) und zeigt pro Vault, ob dort ein Agentic OS, ein Companion, eine `CLAUDE.md` und ein Gedächtnis-Index (`memory/MEMORY.md`) liegen, dazu die gefundenen Werkzeuge und die Codex-Version. Bei mehreren Vaults mit Agentic OS fragst du das Mitglied.
 
-Verwendet das Mitglied einen abweichenden Obsidian-Konfigurationsordner statt `.obsidian` oder ein benutzerdefiniertes CODEX_HOME, stoppe die automatische Installation und kläre den Pfad. Diese erste Installer-Fassung unterstützt die Standardordner. Ein bestehender privater Agentic-OS-Codex-Provider braucht möglicherweise keinen weiteren Zusatz. Erkläre in diesem Fall den Unterschied, bevor ein zweites Terminal installiert wird.
+`inspect` erfasst den gewählten Vault: Agentic-OS-Version und Fork-Hash, Config-Ordner (auch ein umbenannter `.obsidian`-Ordner wird erkannt), Companion-Stand, den Gedächtnisstand (`brain`), die Namen der lokalen Rollen, Skills und MCPs, und ob die Terminaldateien für diese Plattform im Paket liegen (`host_native_available`). Der Bericht enthält keine Prompts und keine Schlüssel.
 
-## Auswahl und konkreter Plan
+Ein benutzerdefiniertes `CODEX_HOME` stoppt die automatische Installation. Kläre dann den Pfad, statt zu raten.
 
-Wähle mit dem Mitglied nur tatsächlich benötigte vorhandene Rollen und Skills aus. Es wird kein persönlicher Agentenkatalog des Erstellers mitinstalliert. Notion/Linear können unabhängig von einer bestehenden Claude-MCP-Definition explizit ausgewählt werden. Andere MCP-Namen werden aus vorhandenen Definitionen geprüft. Nicht automatisch übernehmbare Verbindungen bleiben als konkrete manuelle Schritte sichtbar.
+## Plan
 
 ```sh
-python3 scripts/setup.py plan --vault /absoluter/pfad/zum/vault --agent writer --skill research --mcp notion --output .local/setup-001
+python3 scripts/setup.py plan --vault /absoluter/pfad/zum/vault --agent writer --skill research --mcp notion --output /pfad/arbeitsordner/plan-001
 ```
 
-`writer` und `research` sind Beispiele und dürfen nur durch tatsächlich gefundene Namen ersetzt werden. Ohne diese Optionen werden keine Rollen, Skills oder MCPs übernommen. Für Claude-only kann `--mode claude-only` verwendet werden; der Plan enthält keine Zieländerungen.
+- Ohne `--agent`, `--skill`, `--mcp` werden keine Rollen, Skills oder MCPs übernommen. Nur tatsächlich gefundene Namen verwenden.
+- Das gemeinsame Gedächtnis ist Standard: der Plan enthält einen verwalteten Block am Anfang von `<vault>/AGENTS.md` und den Block `[projects."<vault>"] trust_level = "trusted"` in `~/.codex/config.toml`. Liegt das Second Brain in einem anderen Ordner: `--brain /pfad/zum/brain` ergänzt diesen Ordner als vertrauenswürdiges Projekt und als zusätzlichen Schreibpfad (`sandbox_workspace_write.writable_roots`). `--no-brain` lässt das Gedächtnis komplett aus.
+- `--mode claude-only` erzeugt einen leeren Plan.
 
-Zeige die betroffenen Pfade, Statusmeldungen und Anmeldeschritte, nicht die vollständigen Payloads. `.local/setup-001` enthält lokale Snapshots und bleibt privat, außerhalb von Git und Uploads. Bei Konflikten nicht manuell weiterkopieren. Den Konflikt erklären und mit einer gezielten Anpassung einen neuen Plan erzeugen.
+Zeig dem Mitglied die betroffenen Pfade, `statuses`, `manual_steps` und den `sha256`, nicht die Payloads. Der Plan-Ordner enthält Schnappschüsse der Codex-Konfiguration und bleibt privat: nicht in Git, nicht hochladen. Unter Windows wird er per ACL auf den Benutzer beschränkt.
 
 ## Anwenden
 
-Verwende den SHA256 aus der erfolgreichen Plan-Ausgabe. Wenn die Einrichtung bereits beauftragt ist und der Plan im gewählten Umfang bleibt, ist keine weitere Routinefreigabe erforderlich.
-
 ```sh
-python3 scripts/setup.py apply --plan .local/setup-001 --sha256 HASH_AUS_DER_PLAN_AUSGABE
+python3 scripts/setup.py apply --plan /pfad/arbeitsordner/plan-001 --sha256 HASH_AUS_DER_PLAN_AUSGABE
 ```
 
-Alle Originalhashes werden vor dem ersten Schreiben erneut geprüft. Bereits angewandte Pläne sind wiederholbar, solange niemand die installierten Dateien verändert hat. Mitglieder-Einstellungen in `data.json`, der Basis-Plugin-Code und `community-plugins.json` werden nicht geändert. Das Plugin wird nicht automatisch aktiviert und bestehende Sessions werden nicht neu geladen.
+Alle Originalhashes werden vor dem ersten Schreiben erneut geprüft. Angewandte Pläne sind wiederholbar, solange niemand die installierten Dateien verändert hat. `data.json` des Mitglieds, der Basis-Plugin-Code und `community-plugins.json` werden nicht geändert. Das Plugin wird nicht automatisch aktiviert. Eigener Text in `AGENTS.md` bleibt unter dem verwalteten Block erhalten.
 
-Bei einem unterbrochenen Lauf bleibt ein Journal für Rollback bestehen. Ein nach einem Prozessabbruch übrig gebliebenes Lock darf erst nach Nachweis des beendeten Prozesses durch den betreuenden Agenten archiviert werden. Niemals zwei Installationen gleichzeitig auf denselben Vault anwenden.
+Bei Konflikten ("changed since inspection", "member changes", "review required") nicht von Hand weiterkopieren: Konflikt erklären, neuen Plan mit neuem Ordnernamen erzeugen. Ein nach einem Prozessabbruch übrig gebliebenes Lock erst nach Nachweis des beendeten Prozesses archivieren. Nie zwei Installationen gleichzeitig auf denselben Vault.
 
-## Anmelden und in Obsidian aktivieren
+## Codex installieren und anmelden
 
-Wenn Codex fehlt, nutze die [offizielle CLI-Anleitung](https://developers.openai.com/codex/cli/). Installiere eine zum Host passende CLI. Die Implementierung wurde mit Codex CLI 0.153.4 entwickelt. Spätere oder ältere Versionen benötigen einen Laufzeittest, insbesondere für `app-server` und `--remote`.
+Fehlt Codex, folge der offiziellen Anleitung unter https://developers.openai.com/codex/cli. Mac: `npm install -g @openai/codex` oder `brew install codex`; liegt die ChatGPT-Desktop-App vor, reicht ein Link auf deren mitgelieferte Binary (`/Applications/ChatGPT.app/Contents/Resources/codex`). Windows: `powershell -ExecutionPolicy ByPass -c "irm https://chatgpt.com/codex/install.ps1 | iex"` oder `npm install -g @openai/codex`; die Erweiterung findet neben dem npm-Shim `codex.cmd` von selbst die echte `codex.exe`. Entwickelt gegen Codex CLI 0.155; ältere Versionen brauchen einen Laufzeittest für `app-server` und `--remote`.
 
 ```sh
 codex login
+codex login status
 codex mcp login notion
 ```
 
-Den MCP-Login nur für eine tatsächlich ausgewählte OAuth-Verbindung starten. Das Mitglied autorisiert selbst das richtige Konto. Schlüssel für andere Dienste über deren native lokale Einrichtung verwalten, niemals im Chat einsammeln oder aus Claude-Dateien kopieren.
+Das Mitglied meldet sich selbst an. MCP-Logins nur für tatsächlich ausgewählte OAuth-Verbindungen. Schlüssel anderer Dienste über deren native Einrichtung verwalten, nie im Chat einsammeln oder aus Claude-Dateien kopieren.
 
-Danach in Obsidian die Community-Plugins neu erkennen lassen und „Agentic OS Codex“ einschalten. Ein erforderlicher Obsidian-Neustart geschieht erst, wenn laufende Sessions gesichert sind. Über den Befehl „Codex-Terminal öffnen“ erscheint die Zusatzansicht. Erst der bewusste Start darin startet Codex. Der bisherige Chat-Drawer bleibt unverändert.
+## In Obsidian aktivieren
 
-## Prüfung und Wiederaufnahme
+Obsidian neu laden (offene Cockpit-Terminals schließen dabei, Zeitpunkt vom Mitglied bestätigen lassen), dann Community-Plugins, "Agentic OS Codex" einschalten, Befehl "Codex-Terminal öffnen". Erst der Klick auf "Codex starten" startet einen Prozess. Der bisherige Chat-Drawer bleibt unverändert.
+
+## Prüfung, Beweislauf, Wiederaufnahme
 
 ```sh
 python3 scripts/setup.py doctor --vault /absoluter/pfad/zum/vault
 ```
 
-Doctor prüft die Installation und gegebenenfalls den nativen Login-Status. Er führt keine Modell- oder MCP-Tool-Aufrufe aus. In der tatsächlichen Codex-Ansicht anschließend einen harmlosen Auftrag mit einer ausgewählten Rolle starten, einen ausgewählten Skill prüfen und pro MCP einen passenden Leseaufruf ausführen. Rolle, Tools, eigene Projekte und Resume getrennt prüfen. Ohne diese Nachweise bleibt die funktionale Abnahme offen.
+Doctor prüft Installation, `brain_link` (verwalteter Block in `AGENTS.md` vorhanden), `companion_enabled`, `host_native_available` und den Login-Status. Er führt keine Modell- oder MCP-Aufrufe aus.
 
-Nach einem unterbrochenen OAuth-Ablauf den bestehenden Plan erneut anwenden beziehungsweise Doctor ausführen und beim offenen Login-Schritt weiterarbeiten. Nicht die gesamte Konfiguration neu erzeugen. Das Entfernen einer Auswahl deinstalliert nichts.
+Der Beweis läuft in der echten Codex-Ansicht (Schritt 7 im Setup-Prompt): Codex nennt den Gedächtnis-Index und zitiert daraus, Codex schreibt einen Testeintrag samt Indexzeile, den Claude danach liest, und "Sitzung fortsetzen" öffnet dieselbe Unterhaltung. Pro übernommenem MCP zusätzlich ein Leseaufruf. Ohne diese Nachweise bleibt die funktionale Abnahme offen.
+
+Nach einem unterbrochenen Ablauf den bestehenden Plan erneut anwenden beziehungsweise Doctor ausführen und beim offenen Schritt weiterarbeiten. Nicht die gesamte Konfiguration neu erzeugen.
 
 ## Rollback und Updates
 
 ```sh
-python3 scripts/setup.py rollback --plan .local/setup-001 --sha256 HASH_AUS_DER_PLAN_AUSGABE
+python3 scripts/setup.py rollback --plan /pfad/arbeitsordner/plan-001 --sha256 HASH_AUS_DER_PLAN_AUSGABE
 ```
 
-Rollback stellt nur unverändert vorliegende Installationsänderungen zurück. Neue Dateien wandern ins lokale Rollback-Archiv. Hat das Mitglied inzwischen eine betroffene Datei bearbeitet, stoppt der Vorgang. Vor dem Entfernen eines aktivierten Plugin-Pakets dieses in Obsidian deaktivieren, ohne andere Sessions abzubrechen.
+Rollback stellt nur unverändert vorliegende Installationsänderungen zurück, auch den Block in `AGENTS.md`. Neue Dateien wandern ins lokale Rollback-Archiv. Hat das Mitglied eine betroffene Datei inzwischen bearbeitet, stoppt der Vorgang. Vor dem Entfernen eines aktivierten Plugin-Pakets dieses in Obsidian deaktivieren.
 
-Updates bekommen immer einen neuen Plan. Die Eigentumsdateien des Installers erkennen eigene Paketdateien und verwaltete TOML-Blöcke. Lokale Änderungen werden nicht still überschrieben.
+Updates bekommen immer einen neuen Plan. Die Eigentumsdateien des Installers erkennen eigene Paketdateien, verwaltete TOML-Blöcke und den `AGENTS.md`-Block. Lokale Änderungen werden nicht still überschrieben.
+
+## Aus dem Quellcode
+
+Der Source-Checkout enthält kein `host/build`. Baue es mit Node.js: `cd host`, `npm ci --ignore-scripts --no-audit --no-fund`, `npm run build`. Das Release-Paket enthält das Build bereits.

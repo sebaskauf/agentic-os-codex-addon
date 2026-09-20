@@ -1,6 +1,8 @@
 {
   "name": "agentic-os-codex-addon",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Optional Codex companion and adaptive setup for existing Agentic OS installations.",
-  "author": {"name": "SKAILE"}
+  "author": {
+    "name": "SKAILE"
+  }
 }
