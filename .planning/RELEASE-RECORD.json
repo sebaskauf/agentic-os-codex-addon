@@ -7,9 +7,14 @@
   "asset": "agentic-os-codex-addon.zip",
   "asset_url": "https://github.com/sebaskauf/agentic-os-codex-addon/releases/latest/download/agentic-os-codex-addon.zip",
   "asset_contains_host_build": true,
-  "asset_native_dirs": ["darwin-arm64", "darwin-x64", "win32-x64", "win32-arm64"],
-  "code_commit": "pending",
-  "sha256": "pending",
+  "asset_native_dirs": [
+    "darwin-arm64",
+    "darwin-x64",
+    "win32-x64",
+    "win32-arm64"
+  ],
+  "code_commit": "7424328",
+  "sha256": "db85e27ed7d6c8390ed2a1c2fd526ce1ed037afd9053df94cf23786e4c99ddc7",
   "codex_cli_base": "0.155.x",
   "tests_platform": "darwin-arm64",
   "automated_tests_passed": 44,
